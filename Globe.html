@@ -61,7 +61,7 @@
     -webkit-font-smoothing: antialiased;
   }
   button { -webkit-tap-highlight-color: transparent; }
-  .ctrl, .cta, .theme, .brand .mark, .tweaks .t-title { user-select: none; -webkit-user-select: none; }
+  .ctrl, .cta, .theme, .brand .mark, .sheet-title { user-select: none; -webkit-user-select: none; }
   body {
     /* subtle paper grain via layered tints */
     background:
@@ -87,17 +87,6 @@
     z-index: 5;
   }
   .brand { pointer-events: auto; display: flex; flex-direction: column; gap: 2px; }
-  .gh-link {
-    pointer-events: auto;
-    display: inline-flex; align-items: center; gap: 6px;
-    margin-top: 6px;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--ink-dim); text-decoration: none;
-    transition: color 180ms ease;
-  }
-  .gh-link:hover { color: var(--ink); }
-  .gh-link svg { width: 13px; height: 13px; }
   .brand .mark {
     font-family: "Fraunces", serif;
     font-style: italic;
@@ -442,44 +431,67 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* --- tweaks --- */
-  .tweaks {
-    position: fixed;
-    bottom: max(28px, env(safe-area-inset-bottom)); left: 50%;
-    transform: translate(-50%, 200%);
+  /* --- sheet (shared modal/drawer) --- */
+  .sheet {
+    position: fixed; inset: 0;
+    z-index: 200;
+    visibility: hidden; opacity: 0;
+    transition: opacity .2s ease, visibility .2s ease;
+    pointer-events: none;
+  }
+  .sheet.open { visibility: visible; opacity: 1; pointer-events: auto; }
+  .sheet-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(20, 15, 5, 0.32);
+    cursor: pointer;
+  }
+  .sheet-panel {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -46%);
+    width: min(420px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
     background: var(--paper);
     border: 1px solid var(--rule);
-    padding: 14px 22px;
-    display: none;
-    gap: 22px;
-    align-items: center;
-    z-index: 7;
-    transition: transform .3s;
-    box-shadow: 0 14px 30px rgba(40, 30, 15, 0.08);
+    box-shadow: 0 24px 60px rgba(40, 30, 15, 0.22);
+    padding: 26px 26px 22px;
+    display: flex; flex-direction: column; gap: 16px;
+    transition: transform .28s cubic-bezier(.22,1,.36,1);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
-  .tweaks.open { display: flex; transform: translate(-50%, 0); }
-  .tweaks .t-title {
+  .sheet.open .sheet-panel { transform: translate(-50%, -50%); }
+  .sheet-handle { display: none; }
+  .sheet-close {
+    position: absolute; top: 12px; right: 12px;
+    width: 28px; height: 28px;
+    background: transparent; border: 0;
+    color: var(--ink-faint); cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .sheet-close:hover { color: var(--ink); }
+  .sheet-title {
     font-family: "Fraunces", serif;
     font-style: italic;
-    font-size: 14px;
+    font-size: 20px;
     color: var(--ink);
-    padding-right: 16px;
-    border-right: 1px solid var(--rule);
+    padding-right: 36px;
   }
-  .tweaks .t-group { display: flex; align-items: center; gap: 10px; }
-  .tweaks label {
+  .sheet-body { display: flex; flex-direction: column; gap: 18px; }
+  .sheet-body .t-group { display: flex; flex-direction: column; gap: 8px; }
+  .sheet-body label {
     font-family: "JetBrains Mono", monospace;
     font-size: 9px;
     color: var(--ink-dim);
     text-transform: uppercase;
     letter-spacing: 0.15em;
   }
-  .tweaks input[type=range] { width: 90px; accent-color: var(--ink); }
+  .sheet-body input[type=range] { width: 100%; accent-color: var(--ink); }
 
-  /* Theme cards — compact preview of each saved style */
-  .tweaks .themes { display: flex; gap: 6px; }
-  .tweaks .theme {
-    width: 48px; height: 36px;
+  /* Theme cards */
+  .themes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .theme {
+    width: 56px; height: 44px;
     border: 1px solid var(--rule);
     border-radius: 2px;
     cursor: pointer;
@@ -488,64 +500,47 @@
     position: relative;
     transition: transform .15s, border-color .15s;
   }
-  .tweaks .theme:hover { transform: translateY(-1px); border-color: var(--ink-soft); }
-  .tweaks .theme.active {
-    border-color: var(--ink);
-    box-shadow: 0 0 0 1px var(--ink);
-  }
-  .tweaks .theme .t-bg { flex: 1; display: flex; align-items: center; justify-content: center; }
-  .tweaks .theme .t-globe {
+  .theme:hover { transform: translateY(-1px); border-color: var(--ink-soft); }
+  .theme.active { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .theme .t-bg { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .theme .t-globe {
     width: 22px; height: 22px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
   }
-  .tweaks .theme .t-globe::after {
-    /* inner circle uses the accent/ink tone */
+  .theme .t-globe::after {
     content: ""; width: 9px; height: 9px; border-radius: 50%;
     background: currentColor;
   }
-  .tweaks .theme .t-name {
+  .theme .t-name {
     position: absolute; bottom: 2px; left: 0; right: 0;
     text-align: center;
     font-family: "JetBrains Mono", monospace;
-    font-size: 7px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    opacity: 0;
-    transition: opacity .15s;
+    font-size: 7px; letter-spacing: 0.1em; text-transform: uppercase;
+    opacity: 0; transition: opacity .15s;
     background: rgba(0,0,0,0.35);
     color: #fff;
     padding: 1px 0;
   }
-  .tweaks .theme:hover .t-name,
-  .tweaks .theme.active .t-name { opacity: 1; }
+  .theme:hover .t-name, .theme.active .t-name { opacity: 1; }
 
-  /* Bigger hit targets on touch devices */
-  @media (pointer: coarse) {
+  /* ================================================================
+     Mobile / coarse-pointer mode — single breakpoint, Terraink-style
+     ================================================================ */
+  @media (max-width: 768px), (hover: none) and (pointer: coarse) {
+    /* Touch-friendly controls */
     .ctrl { width: 44px; height: 44px; }
     .info .close { width: 36px; height: 36px; top: 8px; right: 8px; }
     .info .cta { padding: 14px; font-size: 11px; }
-  }
 
-  @media (max-width: 760px) {
+    /* Drop subtitle so search has room */
+    .brand .sub { display: none; }
     .stamp { max-width: 180px; }
     .stamp .title { font-size: 24px; }
-    .search-wrap { top: calc(80px + env(safe-area-inset-top)); }
-    .search { width: calc(100vw - 64px); max-width: 360px; }
-    .hints { display: none; }
-    .meta-strip { display: none; }
+    .hints, .meta-strip { display: none; }
 
-    /* Tweaks panel — fit the viewport width above safe-area */
-    .tweaks {
-      bottom: max(16px, env(safe-area-inset-bottom));
-      width: calc(100vw - 32px);
-      max-width: 420px;
-      padding: 12px 16px;
-      gap: 14px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .tweaks .t-title { display: none; }
-    .tweaks .themes { flex-wrap: wrap; justify-content: center; }
+    .search-wrap { top: calc(64px + env(safe-area-inset-top)); }
+    .search { width: calc(100vw - 32px); max-width: 420px; }
+    .zoom-row .bar { width: 90px; }
 
     /* Info panel as bottom sheet */
     .info {
@@ -558,20 +553,46 @@
       padding: 28px 22px calc(24px + env(safe-area-inset-bottom));
       border-left: 0; border-right: 0; border-bottom: 0;
       border-top: 1px solid var(--rule);
+      border-top-left-radius: 18px;
+      border-top-right-radius: 18px;
+      box-shadow: 0 -12px 40px rgba(40, 30, 15, 0.18);
     }
     .info::before {
-      /* grab handle at top of the sheet */
       content: "";
       position: absolute;
       top: 8px; left: 50%; transform: translateX(-50%);
-      width: 40px; height: 4px;
+      width: 44px; height: 5px;
       background: var(--rule);
-      border-radius: 2px;
+      border-radius: 3px;
       inset: auto;
       border: 0;
     }
     .info.open { transform: translateY(0); }
     .info h2 { font-size: 28px; }
+
+    /* Tweaks sheet → bottom drawer */
+    .sheet-handle {
+      display: block;
+      width: 44px; height: 5px;
+      background: var(--rule);
+      border-radius: 3px;
+      margin: 0 auto 8px;
+    }
+    .sheet-panel {
+      left: 0; top: auto; bottom: 0;
+      transform: translateY(100%);
+      width: 100%;
+      max-width: none;
+      max-height: 78vh;
+      border-top-left-radius: 18px;
+      border-top-right-radius: 18px;
+      border-left: 0; border-right: 0; border-bottom: 0;
+      padding: 14px 20px calc(24px + env(safe-area-inset-bottom));
+      box-shadow: 0 -12px 40px rgba(40, 30, 15, 0.22);
+    }
+    .sheet.open .sheet-panel { transform: translateY(0); }
+    .sheet-title { font-size: 18px; padding-left: 4px; padding-right: 36px; }
+    .sheet-close { top: 10px; right: 14px; width: 36px; height: 36px; }
   }
 </style>
 </head>
@@ -583,10 +604,6 @@
   <div class="brand">
     <div class="mark">iratech</div>
     <div class="sub">Cartographic Register · MMXXVI</div>
-    <a class="gh-link" href="https://github.com/ALU-Kid/meet-world" target="_blank" rel="noopener noreferrer" aria-label="View source on GitHub">
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-      <span>Source</span>
-    </a>
   </div>
   <div class="meta-strip">
     <span>N 00°00′</span><span class="sep">·</span><span>E 000°00′</span>
@@ -644,6 +661,9 @@
     <button class="ctrl" id="toggle-tweaks" title="Themes (T)" aria-label="Toggle theme panel">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
+    <a class="ctrl" id="source-link" href="https://github.com/ALU-Kid/meet-world" target="_blank" rel="noopener noreferrer" title="View source on GitHub" aria-label="View source on GitHub">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+    </a>
   </div>
 </div>
 
@@ -672,15 +692,24 @@
   </button>
 </aside>
 
-<div class="tweaks" id="tweaks">
-  <div class="t-title">Tweaks</div>
-  <div class="t-group">
-    <label>Speed</label>
-    <input type="range" id="t-speed" min="0" max="0.3" step="0.01" />
-  </div>
-  <div class="t-group">
-    <label>Theme</label>
-    <div class="themes" id="t-themes"></div>
+<div class="sheet" id="tweaks" role="dialog" aria-modal="true" aria-labelledby="tweaks-title" aria-hidden="true">
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-panel">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <button class="sheet-close" data-close aria-label="Close themes">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="sheet-title" id="tweaks-title">Themes</div>
+    <div class="sheet-body">
+      <div class="t-group">
+        <label>Theme</label>
+        <div class="themes" id="t-themes"></div>
+      </div>
+      <div class="t-group">
+        <label>Rotation speed</label>
+        <input type="range" id="t-speed" min="0" max="0.3" step="0.01" />
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1245,6 +1274,7 @@ function openInfo(d) {
   document.getElementById("i-coords").textContent = `lat. ${centroid[1].toFixed(2)} · lon. ${centroid[0].toFixed(2)}`;
   const nbs = computeNeighbors(d);
   document.getElementById("i-neigh").textContent = nbs.length ? nbs.length + " bordering" : "Island / none";
+  if (tweaksEl.classList.contains("open")) closeTweaks();
   info.classList.add("open");
 }
 function closeInfo() { info.classList.remove("open"); }
@@ -1433,7 +1463,7 @@ document.addEventListener("click", e => {
       !e.target.closest(".search-wrap") &&
       !e.target.closest(".suggestions") &&
       !e.target.closest(".controls") &&
-      !e.target.closest(".tweaks") &&
+      !e.target.closest(".sheet") &&
       !e.target.closest("path.country")) {
     deselect();
   }
@@ -1480,21 +1510,50 @@ function buildSwatches() {
 }
 
 applyTheme(TWEAKS.theme);
+
+// ---------- Sheet controller ----------
+// Only one overlay (info panel or tweaks sheet) is open at a time.
+const tweaksBtn = document.getElementById("toggle-tweaks");
+function openTweaks() {
+  if (info.classList.contains("open")) deselect();
+  tweaksEl.classList.add("open");
+  tweaksEl.setAttribute("aria-hidden", "false");
+  tweaksBtn.classList.add("active");
+}
+function closeTweaks() {
+  tweaksEl.classList.remove("open");
+  tweaksEl.setAttribute("aria-hidden", "true");
+  tweaksBtn.classList.remove("active");
+}
+function toggleTweaks() {
+  tweaksEl.classList.contains("open") ? closeTweaks() : openTweaks();
+}
+
+// Close the sheet when the user taps the backdrop or the close button.
+tweaksEl.addEventListener("click", e => {
+  if (e.target.closest("[data-close]")) closeTweaks();
+});
+
+tweaksBtn.onclick = toggleTweaks;
+
+window.addEventListener("keydown", e => {
+  if (e.key === "t" || e.key === "T") toggleTweaks();
+  else if (e.key === "Escape") {
+    if (tweaksEl.classList.contains("open")) closeTweaks();
+    else if (info.classList.contains("open")) deselect();
+  }
+});
+
+// Preserve the Iratech edit-mode bridge for embedded use.
 window.addEventListener("message", e => {
   if (!e.data || typeof e.data !== "object") return;
-  if (e.data.type === "__activate_edit_mode") tweaksEl.classList.add("open");
-  else if (e.data.type === "__deactivate_edit_mode") tweaksEl.classList.remove("open");
+  if (e.data.type === "__activate_edit_mode") openTweaks();
+  else if (e.data.type === "__deactivate_edit_mode") closeTweaks();
 });
-if (window.parent === window) tweaksEl.classList.add("open");
-else window.parent.postMessage({ type: "__edit_mode_available" }, "*");
-window.addEventListener("keydown", e => {
-  if (e.key === "t" || e.key === "T") tweaksEl.classList.toggle("open");
-});
-const tweaksBtn = document.getElementById("toggle-tweaks");
-const syncTweaksBtn = () => tweaksBtn.classList.toggle("active", tweaksEl.classList.contains("open"));
-tweaksBtn.onclick = () => { tweaksEl.classList.toggle("open"); syncTweaksBtn(); };
-new MutationObserver(syncTweaksBtn).observe(tweaksEl, { attributes: true, attributeFilter: ["class"] });
-syncTweaksBtn();
+if (window.parent !== window) {
+  window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+}
+
 buildSwatches();
 
 // ---------- Data ----------
