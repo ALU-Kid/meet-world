@@ -1428,7 +1428,10 @@ function formatTimezone(tz) {
 }
 
 let neighborCache = null;
-function computeNeighbors(d) { if (!neighborCache) return []; return neighborCache[d.id] || []; }
+// Key by padded ISO string ("076" Brazil, "068" Bolivia). Coercing to number
+// strips leading zeros and orphans ~20 countries as "Island / none".
+const isoKey = id => String(id).padStart(3, "0");
+function computeNeighbors(d) { if (!neighborCache) return []; return neighborCache[isoKey(d.id)] || []; }
 
 // ---------- Fly-to ----------
 function flyTo(d) {
@@ -1611,7 +1614,7 @@ fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json")
     const neighborArr = topojson.neighbors(world.objects.countries.geometries);
     neighborCache = {};
     world.objects.countries.geometries.forEach((g, i) => {
-      neighborCache[+g.id] = neighborArr[i].map(j => world.objects.countries.geometries[j].id);
+      neighborCache[isoKey(g.id)] = neighborArr[i].map(j => isoKey(world.objects.countries.geometries[j].id));
     });
 
     document.getElementById("meta-count").textContent = String(countries.length).padStart(3,"0") + " regions indexed";
