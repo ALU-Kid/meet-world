@@ -992,12 +992,24 @@ const gSelected = svg.append("path")
 
 const graticule = d3.geoGraticule().step([15, 15])();
 
+// Projection center. On mobile the info sheet covers the lower portion of the
+// screen, so when it's open we shift the globe center upward so the selected
+// country sits above the sheet instead of hiding behind it.
+let centerX = 0, centerY = 0;
+const MOBILE_MEDIA = window.matchMedia("(max-width: 768px), (hover: none) and (pointer: coarse)");
+function updateCenter() {
+  centerX = W / 2;
+  const infoOpen = info && info.classList.contains("open");
+  centerY = (MOBILE_MEDIA.matches && infoOpen) ? H * 0.28 : H / 2;
+  projection.translate([centerX, centerY]);
+}
 function resize() {
   W = window.innerWidth;
   H = window.innerHeight;
   svg.attr("width", W).attr("height", H);
   scale0 = Math.min(W, H) * 0.32;
-  projection.translate([W/2, H/2]).scale(scale0 * zoom);
+  updateCenter();
+  projection.scale(scale0 * zoom);
   render();
 }
 window.addEventListener("resize", resize);
@@ -1006,10 +1018,10 @@ function render() {
   const r = scale0 * zoom;
   // offset shadow ring (down-right), slightly larger
   shadowOffset
-    .attr("cx", W/2 + r * 0.035)
-    .attr("cy", H/2 + r * 0.045)
+    .attr("cx", centerX + r * 0.035)
+    .attr("cy", centerY + r * 0.045)
     .attr("r", r + 2);
-  sphere.attr("cx", W/2).attr("cy", H/2).attr("r", r);
+  sphere.attr("cx", centerX).attr("cy", centerY).attr("r", r);
   gGraticule.attr("d", path(graticule));
 
   if (countries.length) {
@@ -1278,8 +1290,14 @@ function openInfo(d) {
   document.getElementById("i-neigh").textContent = nbs.length ? nbs.length + " bordering" : "Island / none";
   if (tweaksEl.classList.contains("open")) closeTweaks();
   info.classList.add("open");
+  updateCenter();
+  render();
 }
-function closeInfo() { info.classList.remove("open"); }
+function closeInfo() {
+  info.classList.remove("open");
+  updateCenter();
+  render();
+}
 document.getElementById("info-close").onclick = () => deselect();
 // Momondo overrides for countries whose slug or TLD differs from the default.
 // Keyed by ISO 3166-1 numeric (padded to 3). { host, slug } — host defaults
