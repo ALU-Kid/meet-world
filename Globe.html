@@ -932,7 +932,7 @@ function render() {
       .attr("class","country")
       .attr("fill", "transparent")
       .attr("stroke","transparent")
-      .on("mousemove", onHover)
+      .on("mouseenter", onHover)
       .on("mouseleave", onLeave)
       .on("click", onSelect)
       .merge(paths)
@@ -1114,12 +1114,22 @@ document.getElementById("reset").onclick = () => {
 };
 
 // ---------- Hover / select ----------
+function paintFills() {
+  gCountries.selectAll("path.country")
+    .attr("fill", d => d === selected ? "var(--land-selected)" :
+                       d === hovered ? "var(--land-hover)" : "transparent");
+}
 function onHover(e, d) {
   hovered = d;
   showTooltip(d.properties.name, e.clientX, e.clientY);
-  render();
+  paintFills();
 }
-function onLeave() { hovered = null; hideTooltip(); render(); }
+function onLeave() { hovered = null; hideTooltip(); paintFills(); }
+globeEl.addEventListener("pointermove", e => {
+  if (!hovered || dragState) return;
+  tooltip.style.left = e.clientX + "px";
+  tooltip.style.top = e.clientY + "px";
+});
 function showTooltip(name, x, y) {
   tooltip.textContent = name;
   tooltip.style.left = x + "px";
