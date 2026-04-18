@@ -540,7 +540,9 @@
 
     .search-wrap { top: calc(64px + env(safe-area-inset-top)); }
     .search { width: calc(100vw - 32px); max-width: 420px; }
-    .zoom-row .bar { width: 90px; }
+
+    /* Pinch/drag replace zoom/spin buttons on touch — hide them to reduce clutter */
+    .zoom-row, #zoom-in, #zoom-out, #toggle-spin { display: none; }
 
     /* Info panel as bottom sheet */
     .info {
@@ -1289,6 +1291,24 @@ const MOMONDO_OVERRIDES = {
   "178": { slug: "congo-brazzaville" },                      // Republic of Congo
   "748": { slug: "swaziland" },                              // Eswatini
 };
+// Nominatim doesn't resolve world-atlas's abbreviated names. Keyed by ISO
+// 3166-1 numeric (padded to 3); maps to the OSM-friendly full country name.
+const NOMINATIM_COUNTRY_OVERRIDES = {
+  "180": "Democratic Republic of the Congo",  // Dem. Rep. Congo
+  "140": "Central African Republic",          // Central African Rep.
+  "408": "North Korea",                       // Dem. Rep. Korea
+  "728": "South Sudan",                       // S. Sudan
+  "070": "Bosnia and Herzegovina",            // Bosnia and Herz.
+  "226": "Equatorial Guinea",                 // Eq. Guinea
+  "732": "Western Sahara",                    // W. Sahara
+  "090": "Solomon Islands",                   // Solomon Is.
+  "238": "Falkland Islands",                  // Falkland Is.
+  "584": "Marshall Islands",                  // Marshall Is.
+  "580": "Northern Mariana Islands",          // N. Mariana Is.
+  "748": "Eswatini",                          // Swaziland
+  "275": "Palestine",                         // Palestine
+  "626": "East Timor",                        // Timor-Leste
+};
 document.getElementById("i-focus").onclick = () => {
   if (!selected) return;
   const iso = String(selected.id).padStart(3, "0");
@@ -1317,6 +1337,7 @@ terrainkBtn.onclick = async () => {
     return;
   }
   const country = selected.properties.name;
+  const geocodeCountry = NOMINATIM_COUNTRY_OVERRIDES[iso] || country;
   terrainkBtn.disabled = true;
   terrainkBtn.innerHTML = `Geocoding ${capital}…`;
   try {
@@ -1324,7 +1345,7 @@ terrainkBtn.onclick = async () => {
     window.dispatchEvent(new CustomEvent("iratech:open-terraink", {
       detail: { name: country, iso, capital, theme: TWEAKS.theme }
     }));
-    const loc = await window.Poster.geocodeCity(capital, country);
+    const loc = await window.Poster.geocodeCity(capital, geocodeCountry);
     terrainkBtn.innerHTML = `Rendering poster…`;
     await window.Poster.generate({
       city: capital,

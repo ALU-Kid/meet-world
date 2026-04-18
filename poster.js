@@ -611,9 +611,13 @@
    * 4. Canvas size resolution + PNG encoder with DPI chunk
    * ============================================================ */
 
-  const OUTPUT_DPI = 300;
-  const MAX_PIXELS = 8_500_000;
-  const MAX_SIDE = 4096;
+  // Step DPI down on coarse-pointer devices (phones/tablets) to avoid GPU OOM
+  // when rendering the offscreen MapLibre canvas at poster scale.
+  const IS_COARSE_POINTER = typeof window !== "undefined" && window.matchMedia
+    && window.matchMedia("(pointer: coarse)").matches;
+  const OUTPUT_DPI = IS_COARSE_POINTER ? 150 : 300;
+  const MAX_PIXELS = IS_COARSE_POINTER ? 3_500_000 : 8_500_000;
+  const MAX_SIDE = IS_COARSE_POINTER ? 2400 : 4096;
 
   function resolveCanvasSize(widthInches, heightInches) {
     const requestedWidth = Math.max(600, Math.round(widthInches * OUTPUT_DPI));
