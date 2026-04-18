@@ -1,0 +1,1444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "wdqhpk02y3");
+</script>
+<title>iratech · Line Globe</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,700;1,9..144,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@5.19.0/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5.19.0/dist/maplibre-gl.js"></script>
+<script src="country-facts.js"></script>
+<script src="poster.js"></script>
+<!-- ext-resource-dependency: https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json -->
+<style>
+  :root {
+    /* warm cream palette matching reference */
+    --bg: #efe9e0;
+    --bg-tint: #e7e0d5;
+    --paper: #f4efe6;
+    --ink: #1c1b18;
+    --ink-soft: #3a3833;
+    --ink-dim: #7a7770;
+    --ink-faint: #a8a49b;
+    --rule: #c9c3b7;
+
+    --line: #2a2925;           /* country outlines */
+    --line-soft: #55524b;      /* graticule */
+    --line-faint: #9a968d;     /* secondary graticule */
+    --sphere: #2a2925;         /* equator / outer ring */
+
+    --ocean: #e0d8c7;          /* slightly darker than paper — water */
+    --land-fill: #f6f1e6;      /* paper-tone land, reads against ocean */
+
+    --accent: #b65a38;         /* terracotta selection */
+    --accent-soft: #e9c9b8;
+    --accent-tint: rgba(182, 90, 56, 0.10);
+
+    --land-hover: #eee4d0;
+    --land-selected: rgba(182, 90, 56, 0.22);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Fraunces", Georgia, "Times New Roman", serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    /* subtle paper grain via layered tints */
+    background:
+      radial-gradient(1400px 900px at 75% 25%, rgba(255,250,242,0.5) 0%, transparent 55%),
+      radial-gradient(1000px 800px at 15% 85%, rgba(215,205,188,0.35) 0%, transparent 55%),
+      var(--bg);
+  }
+
+  .stage { position: fixed; inset: 0; display: grid; place-items: center; }
+  #globe { display: block; cursor: grab; touch-action: none; }
+  #globe.dragging { cursor: grabbing; }
+  #globe path.country { cursor: pointer; }
+  #globe.dragging path.country { cursor: grabbing; }
+
+  /* --- top bar --- */
+  .topbar {
+    position: fixed; top: 28px; left: 32px; right: 32px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .brand { pointer-events: auto; display: flex; flex-direction: column; gap: 2px; }
+  .brand .mark {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 28px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .brand .mark .amp { color: var(--accent); }
+  .brand .sub {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  .meta-strip {
+    pointer-events: auto;
+    text-align: right;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 1.7;
+  }
+  .meta-strip .big {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .meta-strip .sep { color: var(--ink-faint); margin: 0 6px; }
+
+  /* --- search (center-top) --- */
+  .search-wrap {
+    position: fixed;
+    top: 32px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    pointer-events: auto;
+  }
+  .search {
+    width: 360px;
+    display: flex; align-items: center; gap: 10px;
+    background: transparent;
+    border-bottom: 1px solid var(--rule);
+    padding: 6px 2px;
+    transition: border-color .2s;
+  }
+  .search:focus-within { border-bottom-color: var(--ink); }
+  .search svg { color: var(--ink-dim); flex-shrink: 0; }
+  .search input {
+    flex: 1;
+    background: transparent; border: 0; outline: 0;
+    color: var(--ink);
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 17px;
+  }
+  .search input::placeholder { color: var(--ink-faint); font-style: italic; }
+  .search kbd {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    border: 1px solid var(--rule);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .suggestions {
+    position: absolute;
+    top: 46px; left: 0; right: 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    max-height: 280px; overflow-y: auto;
+    display: none;
+    box-shadow: 0 18px 40px rgba(40, 32, 20, 0.08);
+  }
+  .suggestions.open { display: block; }
+  .suggestions .item {
+    padding: 10px 16px;
+    font-size: 14px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-bottom: 1px solid var(--rule);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .suggestions .item:last-child { border-bottom: none; }
+  .suggestions .item:hover, .suggestions .item.active {
+    background: var(--bg-tint);
+    color: var(--ink);
+  }
+  .suggestions .item .region {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px; letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* --- bottom-left ornamental label --- */
+  .stamp {
+    position: fixed; bottom: 28px; left: 32px;
+    max-width: 260px;
+    pointer-events: none;
+    z-index: 4;
+  }
+  .stamp .no {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .stamp .title {
+    font-family: "Fraunces", serif;
+    font-size: 34px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    color: var(--ink);
+  }
+  .stamp .title em { font-style: italic; color: var(--accent); font-weight: 400; }
+  .stamp .body {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--ink-dim);
+    line-height: 1.55;
+    font-family: "JetBrains Mono", monospace;
+    text-wrap: pretty;
+  }
+
+  /* --- bottom-right controls --- */
+  .controls {
+    position: fixed; bottom: 28px; right: 32px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 14px;
+    z-index: 5;
+  }
+  .zoom-row {
+    display: flex; align-items: center; gap: 12px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .zoom-row .bar {
+    width: 140px; height: 1px; background: var(--rule);
+    position: relative;
+  }
+  .zoom-row .bar .fill {
+    position: absolute; top: -1px; left: 0; height: 3px;
+    background: var(--ink);
+    width: 0%;
+    transition: width .2s;
+  }
+  .zoom-row .val {
+    font-family: "Fraunces", serif; font-style: italic;
+    font-size: 13px; color: var(--ink);
+    text-transform: none; letter-spacing: 0;
+    min-width: 44px; text-align: right;
+  }
+
+  .btn-row { display: flex; gap: 6px; }
+  .ctrl {
+    width: 36px; height: 36px;
+    background: transparent;
+    border: 1px solid var(--rule);
+    border-radius: 50%;
+    color: var(--ink-soft);
+    display: grid; place-items: center;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .ctrl:hover { background: var(--paper); color: var(--ink); border-color: var(--ink); }
+  .ctrl.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  /* --- hints (left, mid) --- */
+  .hints {
+    position: fixed;
+    top: 50%; left: 32px;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 14px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px;
+    color: var(--ink-faint);
+    letter-spacing: 0.15em; text-transform: uppercase;
+    z-index: 4;
+    pointer-events: none;
+    writing-mode: vertical-rl;
+    transform: translateY(-50%) rotate(180deg);
+  }
+  .hints .row { display: flex; align-items: center; gap: 8px; }
+
+  /* --- info panel (right, slides in) --- */
+  .info {
+    position: fixed;
+    top: 50%; right: 32px;
+    transform: translate(420px, -50%);
+    width: 320px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 28px 26px 24px;
+    transition: transform .5s cubic-bezier(.22,1,.36,1);
+    z-index: 6;
+    box-shadow: 0 20px 50px rgba(40, 30, 15, 0.08);
+  }
+  .info.open { transform: translate(0, -50%); }
+  .info::before {
+    content: ""; position: absolute; inset: 4px; border: 1px solid var(--rule); pointer-events: none;
+  }
+  .info .close {
+    position: absolute; top: 12px; right: 12px;
+    width: 24px; height: 24px;
+    background: transparent; border: 0;
+    color: var(--ink-faint); cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .info .close:hover { color: var(--ink); }
+
+  .info .num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 4px;
+  }
+  .info .num .dot { color: var(--accent); }
+  .info h2 {
+    margin: 0 0 2px 0;
+    font-family: "Fraunces", serif;
+    font-weight: 400;
+    font-size: 32px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+  .info .latin {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink-dim);
+    margin-bottom: 18px;
+  }
+  .info .hr {
+    height: 1px; background: var(--rule); margin: 16px -4px;
+  }
+  .info .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 24px;
+  }
+  .info .cell .k {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px; letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 4px;
+  }
+  .info .cell .v {
+    font-family: "Fraunces", serif;
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+  .info .cta {
+    margin-top: 22px;
+    width: 100%;
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    padding: 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .info .cta:hover { background: var(--ink); color: var(--bg); }
+  .info .cta + .cta { margin-top: 10px; }
+  .info .cta.cta-accent {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: transparent;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .info .cta.cta-accent:hover {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  /* --- hover tooltip --- */
+  .tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--ink);
+    color: var(--bg);
+    padding: 5px 10px;
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 13px;
+    transform: translate(-50%, -140%);
+    opacity: 0;
+    transition: opacity .12s;
+    z-index: 20;
+    white-space: nowrap;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip::after {
+    content: "";
+    position: absolute;
+    bottom: -4px; left: 50%;
+    margin-left: -4px;
+    border: 4px solid transparent;
+    border-top-color: var(--ink);
+  }
+
+  /* --- loading --- */
+  .loading {
+    position: fixed; inset: 0;
+    display: grid; place-items: center;
+    background: var(--bg);
+    z-index: 100;
+    transition: opacity .5s;
+  }
+  .loading.done { opacity: 0; pointer-events: none; }
+  .loading .spinner {
+    width: 32px; height: 32px;
+    border: 1px solid var(--rule);
+    border-top-color: var(--ink);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* --- tweaks --- */
+  .tweaks {
+    position: fixed;
+    bottom: 28px; left: 50%;
+    transform: translate(-50%, 120%);
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 14px 22px;
+    display: none;
+    gap: 22px;
+    align-items: center;
+    z-index: 7;
+    transition: transform .3s;
+    box-shadow: 0 14px 30px rgba(40, 30, 15, 0.08);
+  }
+  .tweaks.open { display: flex; transform: translate(-50%, 0); }
+  .tweaks .t-title {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink);
+    padding-right: 16px;
+    border-right: 1px solid var(--rule);
+  }
+  .tweaks .t-group { display: flex; align-items: center; gap: 10px; }
+  .tweaks label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+  }
+  .tweaks input[type=range] { width: 90px; accent-color: var(--ink); }
+
+  /* Theme cards — compact preview of each saved style */
+  .tweaks .themes { display: flex; gap: 6px; }
+  .tweaks .theme {
+    width: 48px; height: 36px;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    cursor: pointer;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    transition: transform .15s, border-color .15s;
+  }
+  .tweaks .theme:hover { transform: translateY(-1px); border-color: var(--ink-soft); }
+  .tweaks .theme.active {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 1px var(--ink);
+  }
+  .tweaks .theme .t-bg { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .tweaks .theme .t-globe {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tweaks .theme .t-globe::after {
+    /* inner circle uses the accent/ink tone */
+    content: ""; width: 9px; height: 9px; border-radius: 50%;
+    background: currentColor;
+  }
+  .tweaks .theme .t-name {
+    position: absolute; bottom: 2px; left: 0; right: 0;
+    text-align: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 7px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity .15s;
+    background: rgba(0,0,0,0.35);
+    color: #fff;
+    padding: 1px 0;
+  }
+  .tweaks .theme:hover .t-name,
+  .tweaks .theme.active .t-name { opacity: 1; }
+
+  @media (max-width: 760px) {
+    .stamp { max-width: 180px; }
+    .stamp .title { font-size: 24px; }
+    .search-wrap { top: 80px; }
+    .search { width: calc(100vw - 64px); max-width: 360px; }
+    .hints { display: none; }
+    .meta-strip { display: none; }
+    .info { width: calc(100vw - 48px); right: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading"><div class="spinner"></div></div>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="mark">iratech</div>
+    <div class="sub">Cartographic Register · MMXXVI</div>
+  </div>
+  <div class="meta-strip">
+    <span>N 00°00′</span><span class="sep">·</span><span>E 000°00′</span>
+    <br>
+    <span class="big">Orthographic Projection</span>
+    <br>
+    <span id="meta-count">000 regions indexed</span>
+  </div>
+</div>
+
+<div class="search-wrap">
+  <div class="search">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="search" placeholder="Search a country…" autocomplete="off" />
+    <kbd>⌘K</kbd>
+  </div>
+  <div class="suggestions" id="suggestions"></div>
+</div>
+
+<div class="hints">
+  <span>drag · rotate &nbsp;·&nbsp; scroll · zoom &nbsp;·&nbsp; click · select</span>
+</div>
+
+<div class="stage">
+  <svg id="globe"></svg>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<div class="stamp">
+  <div class="no">No. 001 / Plate I</div>
+  <div class="title">The <em>Living</em><br>Globe</div>
+  <div class="body">A terrestrial chart of the nations, rendered in the hand of the draughtsman.</div>
+</div>
+
+<div class="controls">
+  <div class="zoom-row">
+    <span>zoom</span>
+    <div class="bar"><div class="fill" id="zoom-bar"></div></div>
+    <span class="val" id="zoom-val">1.00×</span>
+  </div>
+  <div class="btn-row">
+    <button class="ctrl" id="zoom-out" title="Zoom out">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12h14"/></svg>
+    </button>
+    <button class="ctrl" id="zoom-in" title="Zoom in">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button class="ctrl active" id="toggle-spin" title="Auto-rotate">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12a9 9 0 1 1-6.2-8.55"/><path d="M21 3v6h-6"/></svg>
+    </button>
+    <button class="ctrl" id="reset" title="Reset view">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+    </button>
+  </div>
+</div>
+
+<aside class="info" id="info">
+  <button class="close" id="info-close" aria-label="Close">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="num"><span class="dot">●</span> <span id="i-region">REGION</span></div>
+  <h2 id="i-name">Country</h2>
+  <div class="latin" id="i-coords">—</div>
+  <div class="hr"></div>
+  <div class="grid">
+    <div class="cell"><div class="k">Capital</div><div class="v" id="i-capital">—</div></div>
+    <div class="cell"><div class="k">Population</div><div class="v" id="i-pop">—</div></div>
+    <div class="cell"><div class="k">Time zone</div><div class="v" id="i-tz">—</div></div>
+    <div class="cell"><div class="k">Centroid</div><div class="v" id="i-centroid">—</div></div>
+    <div class="cell"><div class="k">Land area</div><div class="v" id="i-area">—</div></div>
+    <div class="cell"><div class="k">Neighbors</div><div class="v" id="i-neigh">—</div></div>
+  </div>
+  <button class="cta" id="i-focus">Fly to Country</button>
+  <button class="cta cta-accent" id="i-terraink">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;vertical-align:-1px">
+      <path d="M12 2 L20 20 L12 16 L4 20 Z"/>
+    </svg>
+    Download Terraink
+  </button>
+</aside>
+
+<div class="tweaks" id="tweaks">
+  <div class="t-title">Tweaks</div>
+  <div class="t-group">
+    <label>Speed</label>
+    <input type="range" id="t-speed" min="0" max="0.3" step="0.01" />
+  </div>
+  <div class="t-group">
+    <label>Theme</label>
+    <div class="themes" id="t-themes"></div>
+  </div>
+</div>
+
+<script>
+const TWEAKS = /*EDITMODE-BEGIN*/{
+  "rotateSpeed": 0.3,
+  "theme": "atlas"
+}/*EDITMODE-END*/;
+
+// ---------- Saved styles ----------
+// Each theme is a complete look — paper, ink, ocean, land, lines, and accent all
+// coordinated. Applied by writing CSS variables at :root, which cascades through the
+// whole UI (globe, topbar, info panel, search, tooltip).
+const THEMES = {
+  atlas: {
+    name: "Atlas",
+    subtitle: "Warm cream paper with terracotta accent — vintage cartographic register.",
+    vars: {
+      "--bg": "#efe9e0",
+      "--bg-tint": "#e7e0d5",
+      "--paper": "#f4efe6",
+      "--ink": "#1c1b18",
+      "--ink-soft": "#3a3833",
+      "--ink-dim": "#7a7770",
+      "--ink-faint": "#a8a49b",
+      "--rule": "#c9c3b7",
+      "--line": "#2a2925",
+      "--line-soft": "#55524b",
+      "--line-faint": "#9a968d",
+      "--sphere": "#2a2925",
+      "--ocean": "#e0d8c7",
+      "--land-fill": "#f6f1e6",
+      "--accent": "#b65a38",
+      "--accent-soft": "#e9c9b8",
+      "--accent-tint": "rgba(182, 90, 56, 0.10)",
+      "--land-hover": "#eee4d0",
+      "--land-selected": "rgba(182, 90, 56, 0.22)"
+    },
+    grain: "radial-gradient(1400px 900px at 75% 25%, rgba(255,250,242,0.5) 0%, transparent 55%), radial-gradient(1000px 800px at 15% 85%, rgba(215,205,188,0.35) 0%, transparent 55%)"
+  },
+  midnight: {
+    name: "Midnight",
+    subtitle: "Deep navy with gold lines — celestial atlas.",
+    vars: {
+      "--bg": "#0d1626",
+      "--bg-tint": "#121d32",
+      "--paper": "#16223a",
+      "--ink": "#e8dcb4",
+      "--ink-soft": "#c9b989",
+      "--ink-dim": "#7a6f52",
+      "--ink-faint": "#4a4332",
+      "--rule": "#2a3753",
+      "--line": "#d4bf7a",
+      "--line-soft": "#8a7744",
+      "--line-faint": "#3a4968",
+      "--sphere": "#e8dcb4",
+      "--ocean": "#0d1626",
+      "--land-fill": "#16223a",
+      "--accent": "#e0a050",
+      "--accent-soft": "#8a5f28",
+      "--accent-tint": "rgba(224, 160, 80, 0.12)",
+      "--land-hover": "#1c2a46",
+      "--land-selected": "rgba(224, 160, 80, 0.20)"
+    },
+    grain: "radial-gradient(1400px 900px at 75% 25%, rgba(60,80,130,0.25) 0%, transparent 55%), radial-gradient(1000px 800px at 15% 85%, rgba(20,30,60,0.4) 0%, transparent 55%)"
+  },
+  terracotta: {
+    name: "Terracotta",
+    subtitle: "Earthy clay tones — sun-baked desert chart.",
+    vars: {
+      "--bg": "#2a1612",
+      "--bg-tint": "#351d18",
+      "--paper": "#3a211b",
+      "--ink": "#f0d8c0",
+      "--ink-soft": "#d4b295",
+      "--ink-dim": "#8c6b54",
+      "--ink-faint": "#5c4335",
+      "--rule": "#4a2a22",
+      "--line": "#e89968",
+      "--line-soft": "#a0623f",
+      "--line-faint": "#5c3527",
+      "--sphere": "#f0d8c0",
+      "--ocean": "#2a1612",
+      "--land-fill": "#3a211b",
+      "--accent": "#f28b4a",
+      "--accent-soft": "#a0532a",
+      "--accent-tint": "rgba(242, 139, 74, 0.12)",
+      "--land-hover": "#432822",
+      "--land-selected": "rgba(242, 139, 74, 0.22)"
+    },
+    grain: "radial-gradient(1400px 900px at 75% 25%, rgba(130,60,30,0.25) 0%, transparent 55%), radial-gradient(1000px 800px at 15% 85%, rgba(40,15,10,0.4) 0%, transparent 55%)"
+  },
+  blueprint: {
+    name: "Blueprint",
+    subtitle: "Architectural blueprint — pale roads on navy, via Terraink.",
+    vars: {
+      "--bg": "#1a3a5c",
+      "--bg-tint": "#153357",
+      "--paper": "#1d4066",
+      "--ink": "#e8f4ff",
+      "--ink-soft": "#b8ccea",
+      "--ink-dim": "#6ea4cc",
+      "--ink-faint": "#3d5578",
+      "--rule": "#24447a",
+      "--line": "#d8eefa",
+      "--line-soft": "#7aaed0",
+      "--line-faint": "#435f7d",
+      "--sphere": "#d8eefa",
+      "--ocean": "#0e2740",
+      "--land-fill": "#1a3a5c",
+      "--accent": "#ffd86b",
+      "--accent-soft": "#8c7328",
+      "--accent-tint": "rgba(255, 216, 107, 0.12)",
+      "--land-hover": "#1f466f",
+      "--land-selected": "rgba(255, 216, 107, 0.22)"
+    },
+    grain: "radial-gradient(1400px 900px at 75% 25%, rgba(40,80,150,0.25) 0%, transparent 55%), radial-gradient(1000px 800px at 15% 85%, rgba(10,25,50,0.4) 0%, transparent 55%)"
+  },
+  sage: {
+    name: "Sage",
+    subtitle: "Botanical herbarium — quiet greens on sand.",
+    vars: {
+      "--bg": "#e8e2d0",
+      "--bg-tint": "#ddd5bf",
+      "--paper": "#eee8d6",
+      "--ink": "#1e2a1f",
+      "--ink-soft": "#3d4a38",
+      "--ink-dim": "#6d7a63",
+      "--ink-faint": "#9ca593",
+      "--rule": "#b8bfa8",
+      "--line": "#2a3a28",
+      "--line-soft": "#556b50",
+      "--line-faint": "#98a290",
+      "--sphere": "#2a3a28",
+      "--ocean": "#d5cfb8",
+      "--land-fill": "#ede8d2",
+      "--accent": "#5a7a4a",
+      "--accent-soft": "#aeba9a",
+      "--accent-tint": "rgba(90, 122, 74, 0.12)",
+      "--land-hover": "#e3dcc4",
+      "--land-selected": "rgba(90, 122, 74, 0.22)"
+    },
+    grain: "radial-gradient(1400px 900px at 75% 25%, rgba(240,240,210,0.5) 0%, transparent 55%), radial-gradient(1000px 800px at 15% 85%, rgba(180,185,155,0.35) 0%, transparent 55%)"
+  },
+  noir: {
+    name: "Noir",
+    subtitle: "Pure monochrome — ink on charcoal.",
+    vars: {
+      "--bg": "#121212",
+      "--bg-tint": "#191919",
+      "--paper": "#1c1c1c",
+      "--ink": "#ededed",
+      "--ink-soft": "#bfbfbf",
+      "--ink-dim": "#7a7a7a",
+      "--ink-faint": "#484848",
+      "--rule": "#2e2e2e",
+      "--line": "#f0f0f0",
+      "--line-soft": "#8a8a8a",
+      "--line-faint": "#353535",
+      "--sphere": "#f0f0f0",
+      "--ocean": "#121212",
+      "--land-fill": "#1c1c1c",
+      "--accent": "#ff4a3d",
+      "--accent-soft": "#7a241c",
+      "--accent-tint": "rgba(255, 74, 61, 0.12)",
+      "--land-hover": "#232323",
+      "--land-selected": "rgba(255, 74, 61, 0.22)"
+    },
+    grain: "radial-gradient(1400px 900px at 75% 25%, rgba(40,40,40,0.35) 0%, transparent 55%), radial-gradient(1000px 800px at 15% 85%, rgba(0,0,0,0.5) 0%, transparent 55%)"
+  },
+  neon: {
+    name: "Neon",
+    subtitle: "Neon-drenched high-contrast — magenta and cyan, via Terraink.",
+    vars: {
+      "--bg": "#0b0f1a",
+      "--bg-tint": "#130d22",
+      "--paper": "#1a0b2a",
+      "--ink": "#00f5ff",
+      "--ink-soft": "#7fcfd9",
+      "--ink-dim": "#5a8a94",
+      "--ink-faint": "#3a5a66",
+      "--rule": "#21203a",
+      "--line": "#ff2d95",
+      "--line-soft": "#8a33ff",
+      "--line-faint": "#4a0099",
+      "--sphere": "#00f5ff",
+      "--ocean": "#001433",
+      "--land-fill": "#0b0f1a",
+      "--accent": "#ff2d95",
+      "--accent-soft": "#8a1a4f",
+      "--accent-tint": "rgba(255, 45, 149, 0.14)",
+      "--land-hover": "#1a0b2a",
+      "--land-selected": "rgba(255, 45, 149, 0.24)"
+    },
+    grain: "radial-gradient(1400px 900px at 75% 25%, rgba(255,45,149,0.18) 0%, transparent 55%), radial-gradient(1000px 800px at 15% 85%, rgba(0,245,255,0.14) 0%, transparent 55%)"
+  }
+};
+
+// ---------- Region map (numeric ISO -> continent) ----------
+const REGIONS = {
+  "004":"Asia","008":"Europe","012":"Africa","016":"Oceania","020":"Europe","024":"Africa","028":"Americas","031":"Asia","032":"Americas","036":"Oceania",
+  "040":"Europe","044":"Americas","048":"Asia","050":"Asia","051":"Asia","052":"Americas","056":"Europe","060":"Americas","064":"Asia","068":"Americas",
+  "070":"Europe","072":"Africa","076":"Americas","084":"Americas","086":"Asia","090":"Oceania","092":"Americas","096":"Asia","100":"Europe","104":"Asia",
+  "108":"Africa","112":"Europe","116":"Asia","120":"Africa","124":"Americas","132":"Africa","136":"Americas","140":"Africa","144":"Asia","148":"Africa",
+  "152":"Americas","156":"Asia","158":"Asia","170":"Americas","174":"Africa","175":"Africa","178":"Africa","180":"Africa","184":"Oceania","188":"Americas",
+  "191":"Europe","192":"Americas","196":"Asia","203":"Europe","204":"Africa","208":"Europe","212":"Americas","214":"Americas","218":"Americas","222":"Americas",
+  "226":"Africa","231":"Africa","232":"Africa","233":"Europe","242":"Oceania","246":"Europe","250":"Europe","254":"Americas","258":"Oceania","262":"Africa",
+  "266":"Africa","268":"Europe","270":"Africa","275":"Asia","276":"Europe","288":"Africa","292":"Europe","296":"Oceania","300":"Europe","304":"Americas",
+  "308":"Americas","316":"Oceania","320":"Americas","324":"Africa","328":"Americas","332":"Americas","336":"Europe","340":"Americas","344":"Asia","348":"Europe",
+  "352":"Europe","356":"Asia","360":"Asia","364":"Asia","368":"Asia","372":"Europe","376":"Asia","380":"Europe","384":"Africa","388":"Americas",
+  "392":"Asia","398":"Asia","400":"Asia","404":"Africa","408":"Asia","410":"Asia","414":"Asia","417":"Asia","418":"Asia","422":"Asia",
+  "426":"Africa","428":"Europe","430":"Africa","434":"Africa","438":"Europe","440":"Europe","442":"Europe","446":"Asia","450":"Africa","454":"Africa",
+  "458":"Asia","462":"Asia","466":"Africa","470":"Europe","474":"Americas","478":"Africa","480":"Africa","484":"Americas","492":"Europe","496":"Asia",
+  "498":"Europe","499":"Europe","500":"Americas","504":"Africa","508":"Africa","512":"Asia","516":"Africa","520":"Oceania","524":"Asia","528":"Europe",
+  "531":"Americas","533":"Americas","534":"Americas","535":"Americas","540":"Oceania","548":"Oceania","554":"Oceania","558":"Americas","562":"Africa","566":"Africa",
+  "570":"Oceania","574":"Oceania","578":"Europe","580":"Oceania","581":"Oceania","583":"Oceania","584":"Oceania","585":"Oceania","586":"Asia","591":"Americas",
+  "598":"Oceania","600":"Americas","604":"Americas","608":"Asia","612":"Oceania","616":"Europe","620":"Europe","624":"Africa","626":"Asia","630":"Americas",
+  "634":"Asia","638":"Africa","642":"Europe","643":"Europe","646":"Africa","652":"Americas","654":"Africa","659":"Americas","660":"Americas","662":"Americas",
+  "663":"Americas","666":"Americas","670":"Americas","674":"Europe","678":"Africa","682":"Asia","686":"Africa","688":"Europe","690":"Africa","694":"Africa",
+  "702":"Asia","703":"Europe","704":"Asia","705":"Europe","706":"Africa","710":"Africa","716":"Africa","724":"Europe","728":"Africa","729":"Africa",
+  "732":"Africa","740":"Americas","744":"Europe","748":"Africa","752":"Europe","756":"Europe","760":"Asia","762":"Asia","764":"Asia","768":"Africa",
+  "772":"Oceania","776":"Oceania","780":"Americas","784":"Asia","788":"Africa","792":"Asia","795":"Asia","796":"Americas","798":"Oceania","800":"Africa",
+  "804":"Europe","807":"Europe","818":"Africa","826":"Europe","831":"Europe","832":"Europe","833":"Europe","834":"Africa","840":"Americas","850":"Americas",
+  "854":"Africa","858":"Americas","860":"Asia","862":"Americas","876":"Oceania","882":"Oceania","887":"Asia","894":"Africa"
+};
+
+// ---------- Setup ----------
+const svg = d3.select("#globe");
+const tooltip = document.getElementById("tooltip");
+let W = 0, H = 0, scale0 = 0;
+const MIN_ZOOM = 0.6, MAX_ZOOM = 8;
+let zoom = 1;
+let rotate = [135, -20, 0]; // start looking at Asia/Oceania like reference
+let selected = null;
+let hovered = null;
+let countries = [];
+let countryMesh = null;
+
+const projection = d3.geoOrthographic().clipAngle(90).precision(0.3);
+const path = d3.geoPath(projection);
+
+// Layers
+const shadowOffset = svg.append("circle")
+  .attr("fill","none")
+  .attr("stroke","var(--line-faint)")
+  .attr("stroke-width", 0.8)
+  .attr("opacity", 0.55);
+const sphere = svg.append("circle")
+  .attr("fill","var(--ocean)")
+  .attr("stroke","var(--sphere)")
+  .attr("stroke-width", 1.3);
+const gLandFill = svg.append("path")  /* solid land fill so it reads against ocean */
+  .attr("fill","var(--land-fill)")
+  .attr("stroke","none")
+  .attr("pointer-events","none");
+const gGraticule = svg.append("path")
+  .attr("fill","none")
+  .attr("stroke","var(--line-soft)")
+  .attr("stroke-width", 0.45)
+  .attr("opacity", 0.55);
+const gCountries = svg.append("g").attr("class","countries");
+const gBorders = svg.append("path")
+  .attr("fill","none")
+  .attr("stroke","var(--line)")
+  .attr("stroke-width", 0.7)
+  .attr("stroke-linejoin","round")
+  .attr("pointer-events","none");
+const gCoast = svg.append("path")  /* outer coast of land against ocean */
+  .attr("fill","none")
+  .attr("stroke","var(--line)")
+  .attr("stroke-width", 0.9)
+  .attr("pointer-events","none");
+const gSelected = svg.append("path")
+  .attr("fill","var(--accent-tint)")
+  .attr("stroke","var(--accent)")
+  .attr("stroke-width", 1.4)
+  .attr("pointer-events","none");
+
+const graticule = d3.geoGraticule().step([15, 15])();
+
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  svg.attr("width", W).attr("height", H);
+  scale0 = Math.min(W, H) * 0.32;
+  projection.translate([W/2, H/2]).scale(scale0 * zoom);
+  render();
+}
+window.addEventListener("resize", resize);
+
+function render() {
+  const r = scale0 * zoom;
+  // offset shadow ring (down-right), slightly larger
+  shadowOffset
+    .attr("cx", W/2 + r * 0.035)
+    .attr("cy", H/2 + r * 0.045)
+    .attr("r", r + 2);
+  sphere.attr("cx", W/2).attr("cy", H/2).attr("r", r);
+  gGraticule.attr("d", path(graticule));
+
+  if (countries.length) {
+    // country fills (for hover/select & hit targets)
+    // Key by _uid (unique per feature) because topojson shares id=-99 across disputed territories.
+    const paths = gCountries.selectAll("path.country").data(countries, d => d._uid);
+    paths.exit().remove();
+    paths.enter().append("path")
+      .attr("class","country")
+      .attr("fill", "transparent")
+      .attr("stroke","transparent")
+      .on("mousemove", onHover)
+      .on("mouseleave", onLeave)
+      .on("click", onSelect)
+      .merge(paths)
+      .attr("d", path)
+      .attr("fill", d => d === selected ? "var(--land-selected)" :
+                        d === hovered ? "var(--land-hover)" : "transparent");
+
+    // solid land base (drawn under hover/select fills so unselected land reads as paper)
+    if (landOuter) gLandFill.attr("d", path(landOuter));
+
+    if (countryMesh) gBorders.attr("d", path(countryMesh));
+
+    // coastline = outer boundary of all land against ocean
+    if (landOuter) gCoast.attr("d", path(landOuter));
+
+    if (selected) gSelected.attr("d", path(selected));
+    else gSelected.attr("d", null);
+  }
+}
+
+// ---------- Drag ----------
+const dragSens = () => 0.25 / zoom;
+let dragState = null;
+let dragVel = { x: 0, y: 0 };   // last per-ms velocity in rotation-degrees
+let inertia = null;             // { vx, vy, lastTime } for post-release coast
+const globeEl = svg.node();
+// Listen at window level so dragging continues even if the pointer leaves the element,
+// but DO NOT use setPointerCapture on the svg — it swallows clicks on child <path> elements
+// (killing country selection).
+globeEl.addEventListener("pointerdown", e => {
+  if (e.button !== 0) return;
+  dragState = {
+    x: e.clientX, y: e.clientY,
+    rx: rotate[0], ry: rotate[1],
+    lastX: e.clientX, lastY: e.clientY, lastT: performance.now(),
+    moved: false, id: e.pointerId
+  };
+  inertia = null;
+  dragVel = { x: 0, y: 0 };
+  globeEl.classList.add("dragging");
+  hideTooltip();
+  bumpSpinDelay();
+});
+window.addEventListener("pointermove", e => {
+  if (!dragState || e.pointerId !== dragState.id) return;
+  const dx = e.clientX - dragState.x, dy = e.clientY - dragState.y;
+  if (Math.hypot(dx, dy) > 3) dragState.moved = true;
+  if (dragState.moved) {
+    rotate[0] = dragState.rx + dx * dragSens() * 1.2;
+    rotate[1] = Math.max(-85, Math.min(85, dragState.ry - dy * dragSens() * 1.2));
+    // Track velocity (deg per ms) using a short time window so flicks feel natural.
+    const now = performance.now();
+    const ddt = Math.max(1, now - dragState.lastT);
+    dragVel.x = ((e.clientX - dragState.lastX) * dragSens() * 1.2) / ddt;
+    dragVel.y = (-(e.clientY - dragState.lastY) * dragSens() * 1.2) / ddt;
+    dragState.lastX = e.clientX; dragState.lastY = e.clientY; dragState.lastT = now;
+    projection.rotate(rotate);
+    render();
+  }
+});
+window.addEventListener("pointerup", e => {
+  if (!dragState || e.pointerId !== dragState.id) return;
+  dragState.justDragged = dragState.moved;
+  // If the release had real velocity, start an inertia coast so the map glides to a stop.
+  if (dragState.moved && (Math.abs(dragVel.x) > 0.0005 || Math.abs(dragVel.y) > 0.0005)) {
+    inertia = { vx: dragVel.x, vy: dragVel.y };
+  }
+  setTimeout(() => { dragState = null; }, 0);
+  globeEl.classList.remove("dragging");
+});
+window.addEventListener("pointercancel", () => {
+  dragState = null; globeEl.classList.remove("dragging");
+});
+
+// ---------- Zoom ----------
+// We animate zoom via a target value eased toward in the render loop,
+// so wheel/pinch/button inputs feel buttery instead of stepped.
+let zoomTarget = 1;
+function setZoom(z, { instant = false } = {}) {
+  zoomTarget = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+  if (instant) {
+    zoom = zoomTarget;
+    projection.scale(scale0 * zoom);
+    updateZoomIndicator();
+    render();
+  }
+}
+function updateZoomIndicator() {
+  const pct = ((zoom - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM)) * 100;
+  document.getElementById("zoom-bar").style.width = pct + "%";
+  document.getElementById("zoom-val").textContent = zoom.toFixed(2) + "×";
+}
+globeEl.addEventListener("wheel", e => {
+  e.preventDefault();
+  // Use zoomTarget so rapid scrolls accumulate toward a single eased target.
+  setZoom(zoomTarget * Math.exp(-e.deltaY * 0.0015));
+  bumpSpinDelay();
+}, { passive: false });
+
+let pinch = null;
+globeEl.addEventListener("touchstart", e => {
+  if (e.touches.length === 2) pinch = { d: dist(e.touches[0], e.touches[1]), z: zoomTarget };
+});
+globeEl.addEventListener("touchmove", e => {
+  if (pinch && e.touches.length === 2) {
+    e.preventDefault();
+    setZoom(pinch.z * (dist(e.touches[0], e.touches[1]) / pinch.d));
+    bumpSpinDelay();
+  }
+}, { passive: false });
+globeEl.addEventListener("touchend", () => pinch = null);
+function dist(a, b) { return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); }
+
+document.getElementById("zoom-in").onclick = () => { setZoom(zoomTarget * 1.4); bumpSpinDelay(); };
+document.getElementById("zoom-out").onclick = () => { setZoom(zoomTarget / 1.4); bumpSpinDelay(); };
+
+// ---------- Spin ----------
+const spinBtn = document.getElementById("toggle-spin");
+let spinEnabled = true;  // user toggle state (separate from the momentary pause)
+let spinResumeAt = 0;    // timestamp after which we may resume spinning
+const SPIN_RESUME_DELAY = 3000;  // ms to wait after user interaction before resuming
+function bumpSpinDelay() { spinResumeAt = performance.now() + SPIN_RESUME_DELAY; }
+spinBtn.onclick = () => {
+  spinEnabled = !spinEnabled;
+  spinBtn.classList.toggle("active", spinEnabled);
+  if (spinEnabled) spinResumeAt = 0;
+};
+// Smooth spin + inertia + zoom-easing all live inside the same rAF loop.
+let lastFrame = 0;
+function tick(now) {
+  if (!lastFrame) lastFrame = now;
+  const dt = Math.min(64, now - lastFrame);
+  lastFrame = now;
+  let dirty = false;
+
+  // --- Zoom easing: exponential smoothing toward zoomTarget ---
+  if (Math.abs(zoomTarget - zoom) > 0.0005) {
+    // alpha ~ 0.18 per frame @ 60fps; scale by dt for refresh-rate independence
+    const alpha = 1 - Math.pow(0.82, dt / (1000 / 60));
+    zoom += (zoomTarget - zoom) * alpha;
+    projection.scale(scale0 * zoom);
+    updateZoomIndicator();
+    dirty = true;
+  } else if (zoom !== zoomTarget) {
+    zoom = zoomTarget;
+    projection.scale(scale0 * zoom);
+    updateZoomIndicator();
+    dirty = true;
+  }
+
+  // --- Drag inertia: decay velocity after release ---
+  if (inertia && !dragState) {
+    rotate[0] += inertia.vx * dt;
+    rotate[1] = Math.max(-85, Math.min(85, rotate[1] + inertia.vy * dt));
+    // decay ~ 3.5x/second (frame-rate independent)
+    const decay = Math.pow(0.94, dt / (1000 / 60));
+    inertia.vx *= decay; inertia.vy *= decay;
+    if (Math.abs(inertia.vx) < 0.00005 && Math.abs(inertia.vy) < 0.00005) inertia = null;
+    projection.rotate(rotate);
+    dirty = true;
+  }
+
+  // --- Auto-spin (only after cooldown) ---
+  const mayResume = spinEnabled && !selected && !dragState && !inertia && now >= spinResumeAt;
+  if (mayResume && TWEAKS.rotateSpeed > 0) {
+    rotate[0] += TWEAKS.rotateSpeed * (dt / (1000 / 60));
+    projection.rotate(rotate);
+    dirty = true;
+  }
+
+  if (dirty) render();
+  requestAnimationFrame(tick);
+}
+
+// ---------- Reset ----------
+document.getElementById("reset").onclick = () => {
+  animateTo({ rotate: [135, -20, 0], zoom: 1 });
+  deselect();
+};
+
+// ---------- Hover / select ----------
+function onHover(e, d) {
+  hovered = d;
+  showTooltip(d.properties.name, e.clientX, e.clientY);
+  render();
+}
+function onLeave() { hovered = null; hideTooltip(); render(); }
+function showTooltip(name, x, y) {
+  tooltip.textContent = name;
+  tooltip.style.left = x + "px";
+  tooltip.style.top = y + "px";
+  tooltip.classList.add("show");
+}
+function hideTooltip() { tooltip.classList.remove("show"); }
+
+function onSelect(e, d) {
+  if (dragState && dragState.justDragged) return;
+  select(d);
+}
+let prevView = null;  // { rotate, zoom, spin } saved before a selection so we can restore
+function select(d) {
+  if (!selected) {
+    // first selection — remember where we were so close can restore
+    prevView = { rotate: rotate.slice(), zoom, spin: spinEnabled };
+  }
+  selected = d;
+  openInfo(d);
+  flyTo(d);
+  render();
+}
+function deselect() {
+  const hadSelection = !!selected;
+  selected = null;
+  closeInfo();
+  if (hadSelection && prevView) {
+    const resumeSpin = prevView.spin;
+    animateTo({ rotate: prevView.rotate, zoom: prevView.zoom }, () => {
+      if (resumeSpin) { spinEnabled = true; spinBtn.classList.add("active"); spinResumeAt = 0; }
+    });
+    prevView = null;
+  }
+  render();
+}
+
+// ---------- Info panel ----------
+const info = document.getElementById("info");
+function openInfo(d) {
+  const p = d.properties;
+  const centroid = d3.geoCentroid(d);
+  const computedArea = d3.geoArea(d) * 6371 * 6371;
+  document.getElementById("i-name").textContent = p.name;
+  document.getElementById("i-region").textContent = REGIONS[String(d.id).padStart(3,"0")] || "Region";
+  const iso = String(d.id).padStart(3,"0");
+  const facts = (window.COUNTRY_FACTS || {})[iso] || {};
+  document.getElementById("i-capital").textContent = facts.capital || "—";
+  document.getElementById("i-pop").textContent = facts.pop ? formatPopulation(facts.pop) : "—";
+  document.getElementById("i-tz").textContent = facts.tz ? formatTimezone(facts.tz) : "—";
+  document.getElementById("i-centroid").textContent = `${Math.abs(centroid[1]).toFixed(1)}°${centroid[1]>=0?"N":"S"}, ${Math.abs(centroid[0]).toFixed(1)}°${centroid[0]>=0?"E":"W"}`;
+  const area = facts.area != null ? facts.area : computedArea;
+  document.getElementById("i-area").textContent = formatNumber(area) + " km²";
+  document.getElementById("i-coords").textContent = `lat. ${centroid[1].toFixed(2)} · lon. ${centroid[0].toFixed(2)}`;
+  const nbs = computeNeighbors(d);
+  document.getElementById("i-neigh").textContent = nbs.length ? nbs.length + " bordering" : "Island / none";
+  info.classList.add("open");
+}
+function closeInfo() { info.classList.remove("open"); }
+document.getElementById("info-close").onclick = () => deselect();
+// Momondo overrides for countries whose slug or TLD differs from the default.
+// Keyed by ISO 3166-1 numeric (padded to 3). { host, slug } — host defaults
+// to "www.momondo.com" if omitted.
+const MOMONDO_OVERRIDES = {
+  "706": { host: "www.momondo.co.uk", slug: "somalia" },     // Somalia
+  "180": { slug: "congo-kinshasa" },                         // DR Congo
+  "140": { slug: "central-african-republic" },               // Central African Rep.
+  "178": { slug: "congo-brazzaville" },                      // Republic of Congo
+  "748": { slug: "swaziland" },                              // Eswatini
+};
+document.getElementById("i-focus").onclick = () => {
+  if (!selected) return;
+  const iso = String(selected.id).padStart(3, "0");
+  const o = MOMONDO_OVERRIDES[iso];
+  const host = (o && o.host) || "www.momondo.com";
+  const slug = (o && o.slug) || selected.properties.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  window.open(`https://${host}/flights/${slug}`, "_blank", "noopener,noreferrer");
+};
+const terrainkBtn = document.getElementById("i-terraink");
+const ORIGINAL_TERRAINK_LABEL = terrainkBtn.innerHTML;
+// The CTA pulls: capital from COUNTRY_FACTS, coords from Nominatim (dynamic),
+// and the active Globe theme from TWEAKS.theme. Disabled when no capital is
+// registered for the selected country (e.g., Antarctica).
+terrainkBtn.onclick = async () => {
+  if (!selected) return;
+  const iso = String(selected.id).padStart(3, "0");
+  const facts = (window.COUNTRY_FACTS || {})[iso] || {};
+  const capital = facts.capital;
+  if (!capital || capital === "—") {
+    terrainkBtn.innerHTML = "No capital registered";
+    setTimeout(() => { terrainkBtn.innerHTML = ORIGINAL_TERRAINK_LABEL; }, 1800);
+    return;
+  }
+  if (!window.Poster) {
+    console.error("[Terraink] poster.js not loaded");
+    return;
+  }
+  const country = selected.properties.name;
+  terrainkBtn.disabled = true;
+  terrainkBtn.innerHTML = `Geocoding ${capital}…`;
+  try {
+    // Announce start so other parts of the app can react if they want to.
+    window.dispatchEvent(new CustomEvent("iratech:open-terraink", {
+      detail: { name: country, iso, capital, theme: TWEAKS.theme }
+    }));
+    const loc = await window.Poster.geocodeCity(capital, country);
+    terrainkBtn.innerHTML = `Rendering poster…`;
+    await window.Poster.generate({
+      city: capital,
+      country,
+      lat: loc.lat,
+      lon: loc.lon,
+      globeThemeKey: TWEAKS.theme,
+      widthInches: 18,
+      heightInches: 24,
+      zoom: 12,
+      fontFamily: "Fraunces",
+    });
+    terrainkBtn.innerHTML = "Downloaded ✓";
+    setTimeout(() => { terrainkBtn.innerHTML = ORIGINAL_TERRAINK_LABEL; }, 2000);
+  } catch (err) {
+    console.error("[Terraink] generate failed", err);
+    terrainkBtn.innerHTML = "Failed — see console";
+    setTimeout(() => { terrainkBtn.innerHTML = ORIGINAL_TERRAINK_LABEL; }, 2400);
+  } finally {
+    terrainkBtn.disabled = false;
+  }
+};
+
+function formatNumber(n) {
+  if (n > 1e6) return (n/1e6).toFixed(2) + "M";
+  if (n > 1e3) return (n/1e3).toFixed(0) + "k";
+  return Math.round(n).toString();
+}
+
+function formatPopulation(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(2) + " B";
+  if (n >= 1e6) return (n/1e6).toFixed(1) + " M";
+  if (n >= 1e3) return (n/1e3).toFixed(0) + " k";
+  return n.toLocaleString();
+}
+
+function formatTimezone(tz) {
+  // Show the short zone abbrev + UTC offset, e.g. "CET · UTC+1".
+  // Falls back to the raw IANA name if Intl can't resolve it.
+  try {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, timeZoneName: "short", hour: "numeric"
+    }).formatToParts(now);
+    const abbrev = parts.find(p => p.type === "timeZoneName")?.value || "";
+    // Offset in minutes \u2014 compute via two formatted strings.
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hour12: false, year: "numeric", month: "2-digit",
+      day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"
+    });
+    const p = dtf.formatToParts(now).reduce((a, x) => (a[x.type] = x.value, a), {});
+    const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+    const offsetMin = Math.round((asUTC - now.getTime()) / 60000);
+    const sign = offsetMin >= 0 ? "+" : "\u2212";
+    const h = Math.floor(Math.abs(offsetMin) / 60);
+    const m = Math.abs(offsetMin) % 60;
+    const offset = `UTC${sign}${h}${m ? ":" + String(m).padStart(2, "0") : ""}`;
+    return abbrev && !/^GMT/i.test(abbrev) ? `${abbrev} \u00b7 ${offset}` : offset;
+  } catch {
+    return tz.split("/").pop().replace(/_/g, " ");
+  }
+}
+
+let neighborCache = null;
+function computeNeighbors(d) { if (!neighborCache) return []; return neighborCache[d.id] || []; }
+
+// ---------- Fly-to ----------
+function flyTo(d) {
+  const [lon, lat] = d3.geoCentroid(d);
+  const area = d3.geoArea(d);
+  const targetZoom = Math.max(1.3, Math.min(4.5, 0.6 / Math.sqrt(area)));
+  animateTo({ rotate: [-lon, -lat, 0], zoom: targetZoom });
+}
+function animateTo({ rotate: r2, zoom: z2 }, onDone) {
+  const r1 = rotate.slice();
+  const z1 = zoom;
+  // Great-circle interpolator for longitude/latitude — feels much smoother than a raw
+  // Euler-angle lerp, which can cause the globe to swing through the poles.
+  const geoInterp = d3.geoInterpolate([-r1[0], -r1[1]], [-r2[0], -r2[1]]);
+  const roll1 = r1[2], roll2 = r2[2];
+  const start = performance.now(), dur = 1400;
+  // During fly-to we suppress ambient spin, but we don't toggle the user's preference.
+  spinEnabled = false; spinBtn.classList.remove("active");
+  function step(t) {
+    const k = Math.min(1, (t - start) / dur);
+    // Cubic-in-out feels gentle; swap for easeSinInOut if you want even softer.
+    const e = d3.easeCubicInOut(k);
+    const [lon, lat] = geoInterp(e);
+    rotate = [-lon, -lat, roll1 + (roll2 - roll1) * e];
+    zoom = z1 + (z2 - z1) * e;
+    zoomTarget = zoom;
+    projection.rotate(rotate).scale(scale0 * zoom);
+    updateZoomIndicator();
+    render();
+    if (k < 1) requestAnimationFrame(step);
+    else if (onDone) onDone();
+  }
+  requestAnimationFrame(step);
+}
+
+// ---------- Search ----------
+const searchInput = document.getElementById("search");
+const suggestBox = document.getElementById("suggestions");
+searchInput.addEventListener("input", () => {
+  const q = searchInput.value.trim().toLowerCase();
+  if (!q) { suggestBox.classList.remove("open"); return; }
+  const results = countries.filter(c => c.properties.name.toLowerCase().includes(q)).slice(0, 8);
+  suggestBox.innerHTML = results.map(c => {
+    const region = REGIONS[String(c.id).padStart(3,"0")] || "";
+    return `<div class="item" data-uid="${c._uid}"><span>${c.properties.name}</span><span class="region">${region}</span></div>`;
+  }).join("");
+  suggestBox.classList.toggle("open", results.length > 0);
+  suggestBox.querySelectorAll(".item").forEach(el => {
+    el.onclick = (ev) => {
+      ev.stopPropagation();
+      const uid = +el.dataset.uid;
+      const c = countries.find(x => x._uid === uid);
+      if (c) { select(c); searchInput.value = ""; suggestBox.classList.remove("open"); }
+    };
+  });
+});
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault(); searchInput.focus();
+  }
+  if (e.key === "Escape") { deselect(); suggestBox.classList.remove("open"); searchInput.blur(); }
+});
+document.addEventListener("click", e => {
+  if (!e.target.closest(".search") && !e.target.closest(".suggestions")) {
+    suggestBox.classList.remove("open");
+  }
+  // Click-outside: if a country is selected and click lands outside the info panel,
+  // the search box, and any country path, deselect (restores prior view + spin).
+  if (selected &&
+      !e.target.closest(".info") &&
+      !e.target.closest(".search-wrap") &&
+      !e.target.closest(".suggestions") &&
+      !e.target.closest(".controls") &&
+      !e.target.closest(".tweaks") &&
+      !e.target.closest("path.country")) {
+    deselect();
+  }
+});
+
+// ---------- Tweaks ----------
+const tweaksEl = document.getElementById("tweaks");
+function persist(edits) { window.parent.postMessage({ type: "__edit_mode_set_keys", edits }, "*"); }
+
+function applyTheme(key) {
+  const t = THEMES[key] || THEMES.atlas;
+  const root = document.documentElement;
+  for (const [k, v] of Object.entries(t.vars)) root.style.setProperty(k, v);
+  // Refresh paper-grain layer to match theme tones.
+  document.body.style.background = `${t.grain}, var(--bg)`;
+  // Re-render the globe so fills/strokes pick up new vars from getComputedStyle, if used.
+  if (window.render) render();
+}
+
+function buildSwatches() {
+  const wrap = document.getElementById("t-themes");
+  wrap.innerHTML = Object.entries(THEMES).map(([key, t]) => {
+    const v = t.vars;
+    // Outer circle = ocean (the dominant globe color); inner dot = accent/line ink.
+    return `<div class="theme" data-key="${key}" title="${t.name} \u2014 ${t.subtitle}"
+              style="background:${v['--bg']}">
+      <div class="t-bg"><div class="t-globe" style="background:${v['--ocean']}; color:${v['--accent']}"></div></div>
+      <div class="t-name" style="color:${v['--ink']}; background:${v['--paper']}">${t.name}</div>
+    </div>`;
+  }).join("");
+  wrap.querySelectorAll(".theme").forEach(el => {
+    if (el.dataset.key === TWEAKS.theme) el.classList.add("active");
+    el.onclick = () => {
+      TWEAKS.theme = el.dataset.key;
+      applyTheme(el.dataset.key);
+      wrap.querySelectorAll(".theme").forEach(s => s.classList.remove("active"));
+      el.classList.add("active");
+      persist({ theme: el.dataset.key });
+    };
+  });
+  const sp = document.getElementById("t-speed");
+  sp.value = TWEAKS.rotateSpeed;
+  sp.oninput = () => { TWEAKS.rotateSpeed = +sp.value; persist({ rotateSpeed: +sp.value }); };
+}
+
+applyTheme(TWEAKS.theme);
+window.addEventListener("message", e => {
+  if (!e.data || typeof e.data !== "object") return;
+  if (e.data.type === "__activate_edit_mode") tweaksEl.classList.add("open");
+  else if (e.data.type === "__deactivate_edit_mode") tweaksEl.classList.remove("open");
+});
+if (window.parent === window) tweaksEl.classList.add("open");
+else window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+window.addEventListener("keydown", e => {
+  if (e.key === "t" || e.key === "T") tweaksEl.classList.toggle("open");
+});
+buildSwatches();
+
+// ---------- Data ----------
+let landOuter = null;
+fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json")
+  .then(r => r.json())
+  .then(world => {
+    const fc = topojson.feature(world, world.objects.countries);
+    countries = fc.features.filter(f => f.properties.name);
+    // Assign a stable unique id per feature — many disputed territories share id=-99,
+    // which breaks D3 keyed data joins (causing duplicate / orphaned paths on re-render).
+    countries.forEach((f, i) => { f._uid = i; });
+    countryMesh = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
+    landOuter = topojson.merge(world, world.objects.countries.geometries);
+
+    const neighborArr = topojson.neighbors(world.objects.countries.geometries);
+    neighborCache = {};
+    world.objects.countries.geometries.forEach((g, i) => {
+      neighborCache[+g.id] = neighborArr[i].map(j => world.objects.countries.geometries[j].id);
+    });
+
+    document.getElementById("meta-count").textContent = String(countries.length).padStart(3,"0") + " regions indexed";
+
+    resize();
+    updateZoomIndicator();
+    document.getElementById("loading").classList.add("done");
+    requestAnimationFrame(tick);
+  })
+  .catch(err => {
+    document.getElementById("loading").innerHTML = `<div style="color:var(--ink-dim);font-family:monospace;font-size:12px">Failed to load map data.<br>${err.message}</div>`;
+    console.error(err);
+  });
+</script>
+
+</body>
+</html>
