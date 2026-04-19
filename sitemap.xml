@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The Living Globe — sitemap
+  Replace SITE_URL below with the deployed origin (e.g. https://meet-world.vercel.app
+  or a custom domain) before submitting to Google Search Console / Bing Webmaster.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>SITE_URL/</loc>
+    <lastmod>2026-04-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
